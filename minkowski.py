@@ -14,10 +14,10 @@ class MinkowskiMesh2D:
         verts_2 = np.asarray(verts2)
 
         minkowski_diff = np.repeat(verts1, verts2.shape[0], 0) - np.tile(verts2, (verts1.shape[0], 1))
-        return ConvexHull.compute_from_points(minkowski_diff)
+        return ConvexHull2D.compute_from_points(minkowski_diff)
          
 
-class ConvexHull: 
+class ConvexHull2D: 
     @staticmethod
     def compute_from_points(verts):
         # convert to np.array 
