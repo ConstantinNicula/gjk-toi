@@ -14,6 +14,7 @@ class PhysicsObject:
         self.vel = vel
         self.accel = accel
 
+    # update internal state
     def set_rotation(self, rot:glm.mat3):
         self.rot = rot 
 
@@ -25,3 +26,6 @@ class PhysicsObject:
  
     def update(self, dt: float):
         self.pos = self.pos + self.vel * dt + self.accel * dt**2 
+
+    # utility functions for transformations 
+    
