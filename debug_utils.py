@@ -77,7 +77,7 @@ class DebugVisualizer3D:
         
         # create a settings dock (should be separate class)
         self.obj_a_settings = SettingsDock("Object A Settings", self.area, location='right')
-        #self.obj_b_settings = SettingsDock("Object B Settings", self.area, location='bottom', ref_dock=self.obj_a_settings.dock)
+        self.obj_b_settings = SettingsDock("Object B Settings", self.area, location='bottom', ref_dock=self.obj_a_settings.dock)
         
         # display window  
         self.win.show()
@@ -91,14 +91,11 @@ class DebugVisualizer3D:
         self.app.exec_()
 
 class SceneDock:
-    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (3, 1), location:str = 'left', ref_dock:Dock|None = None):
+    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (3, 3), location:str = 'left'):
         # create a dock and pin it to the parent
         self.dock = Dock(name, parent_area, size)
-        if not ref_dock: 
-            parent_area.addDock(self.dock, location)
-        else:
-            parent_area.addDock(self.dock, location, ref_dock)
-
+        parent_area.addDock(self.dock, location)
+        
         # create view widget and pin it to own dock
         self.view_widget = gl.GLViewWidget()
         self.dock.addWidget(self.view_widget)
@@ -113,37 +110,73 @@ class SceneDock:
         self.lines = []
 
 class SettingsDock:
-    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (1,1), location:str = 'right'):
+    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (1,1), location:str = 'right', ref_dock:Dock|None = None):
         # create a dock and pin it to the parent 
         self.dock = Dock(name, parent_area, size)
-        parent_area.addDock(self.dock, location) 
+        if not ref_dock: 
+            parent_area.addDock(self.dock, location) 
+        else:
+            parent_area.addDock(self.dock, location, ref_dock)
 
         # create a dock layout 
         self.layout = pg.LayoutWidget()
         self.dock.addWidget(self.layout)
 
-        _add_labeled_vec3_field(self.layout, "Rotation:", (-10, -10, -10), (10, 10, 10), (0, 0, 0), lambda x: print(x))
-        _add_labeled_vec3_field(self.layout, "Scale:", (-10, -10, -10), (10, 10, 10), (0, 0, 0), lambda x: print(x))
-        _add_labeled_vec3_field(self.layout, "Initial position:", (-10, -10, -10), (10, 10, 10), (0, 0, 0), lambda x: print(x))
-        _add_labeled_vec3_field(self.layout, "Initial velocity:", (-10, -10, -10), (10, 10, 10), (0, 0, 0), lambda x: print(x))
+        # add settings fields
+        min_rot, max_rot = (-180, -180, -180), (180, 180, 180)
+        min_scale, max_scale = (0, 0, 0), (10, 10, 10)
+        min_vals, max_vals = (-1000, -1000, -1000), (1000, 1000, 100)
 
+        self.rotation_data = _add_labeled_vec3_field(self.layout, "Rotation:",min_rot, max_rot , (0, 0, 0), self.__read_all_data)
+        self.scale =_add_labeled_vec3_field(self.layout, "Scale:", min_scale, max_scale, (1.0, 1.0, 1.0), self.__read_all_data)
+        self.position_data =_add_labeled_vec3_field(self.layout, "Initial position:", min_vals, max_vals, (0, 0, 0), self.__read_all_data)
+        self.velocity_data = _add_labeled_vec3_field(self.layout, "Initial velocity:", min_vals, max_vals, (0, 0, 0), self.__read_all_data)
+       
+    def __read_vec_data(self, vec_fields: tuple[QtWidgets.QLineEdit]): 
+        return 
+        read_f = lambda tb: float(tb.text())
+        return list(map(read_f, vec_fields))
+    
+    def __read_all_data(self, unused):
+        return
+        data_fields = (self.rotation_data, self.scale, self.position_data, self.velocity_data)
+        return tuple(map(self.__read_vec_data, data_fields)) 
 
     def __create_object_properties_dock(self, name:str, callback_fn) -> Dock:
         pass 
     
+class SuperSpinner(QtWidgets.QDoubleSpinBox):
+    def __init__(self):
+        super(SuperSpinner, self).__init__()
 
-def _create_float_field(range: tuple[float, float], default_value:float, callback)->QtWidgets.QLineEdit:
-    # create validator 
-    validator = QtGui.QDoubleValidator()
-    validator.setRange(*range, 2)
+        self.mouseStartPosY = 0
+        self.startValue = 0
 
-    # create textbox and attach validator
-    tbox = QtWidgets.QLineEdit()
-    tbox.setText(str(default_value))
-    tbox.setValidator(validator)
-    tbox.textChanged.connect(callback)
-    tbox.setFrame(False)
-    return tbox
+    def mousePressEvent(self, e):
+        super(SuperSpinner, self).mousePressEvent(e)
+        self.mouseStartPosY = e.pos().y()
+        self.startValue = self.value()
+
+    def mouseMoveEvent(self, e):
+        self.setCursor(QtCore.Qt.SizeVerCursor)
+
+        multiplier = .02
+        valueOffset = (self.mouseStartPosY - e.pos().y()) * multiplier
+        self.setValue(self.startValue + valueOffset)
+
+    def mouseReleaseEvent(self, e):
+        super(SuperSpinner, self).mouseReleaseEvent(e)
+        self.unsetCursor()
+
+def _create_float_field(range: tuple[float, float], default_value:float, callback) -> SuperSpinner:
+    super_spin = SuperSpinner()
+    super_spin.setMinimum(range[0])
+    super_spin.setMaximum(range[1])
+    super_spin.setLocale(QtCore.QLocale("en_US"))
+    super_spin.setSingleStep(0.01)
+    super_spin.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+    super_spin.valueChanged.connect(callback)
+    return super_spin
 
 def _add_labeled_float_field(layout: pg.LayoutWidget, prefix_str:str, 
                                 range: tuple[float, float], default_value:float, 
