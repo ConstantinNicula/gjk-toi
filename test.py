@@ -1,6 +1,6 @@
 import numpy as np 
 import glm
-from debug_utils import DebugPlotter
+from debug_utils import DebugPlotter, DebugVisualizer3D
 from minkowski import MinkowskiMesh2D
 from simplex import Simplex
 from collision_mesh import CollisionMesh
@@ -82,7 +82,15 @@ def test_gjk():
     plotter.display()
 
     print(ret)
+
+def test_3d_vis():
+    debug_visualizer = DebugVisualizer3D("Test")
+    debug_visualizer.display()
+
+
+
 if __name__ == "__main__":
     #test_minkowski()
     #test_simplex()
-    test_gjk()
+    #test_gjk()
+    test_3d_vis()
