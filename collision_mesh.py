@@ -12,12 +12,11 @@ class CollisionMesh:
         Loop through all verts in collision mesh and find the furthest one in direction of support_dir
         Note: can be replaced with a simple analytical function for primitive meshes (sphere, cube, etc..)
     """
-    def get_support_point(self, support_dir:glm.vec3):
+    def get_support_point(self, support_dir:glm.vec3) -> tuple[glm.vec3, int]:
         support_dir = glm.normalize(support_dir)
-
         best_idx = 0 
         max_dist = glm.dot(support_dir, self.verts[0])
-        for v, idx in enumerate(self.verts):
+        for idx, v in enumerate(self.verts):
             dist = glm.dot(v, support_dir)
             if dist > max_dist:
                 max_dist = dist 
