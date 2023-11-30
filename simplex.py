@@ -33,7 +33,7 @@ class Simplex:
         q = None 
         if self.num_verts == 1:
             q = self.verts[0]
-            self._keep_indices = (0)
+            self._keep_indices = (0, )
         elif self.num_verts == 2:
             q = self.__find_closest_point_on_segment(p)
         elif self.num_verts == 3:
@@ -60,13 +60,13 @@ class Simplex:
         t = glm.dot(p - a, ab)
         if t <= 0.0:
             # p projects outside the [a,b] interval, on the a side; return a 
-            self._keep_indices = (0)
+            self._keep_indices = (0,)
             return a;  
          
         denom = glm.dot(ab, ab); # Always nonnegative since denom = ||ab||∧2
         if t >= denom: 
             # p projects outside the [a,b] interval, on the b side; clamp to b
-            self._keep_indices = (1)
+            self._keep_indices = (1,)
             t = 1.0
             return b; 
             
@@ -87,7 +87,7 @@ class Simplex:
         d1 = glm.dot(ab, ap)
         d2 = glm.dot(ac, ap)
         if d1 <= 0.0 and d2 <= 0.0:
-            self._keep_indices = (ai)
+            self._keep_indices = (ai,)
             return a # barycentric coordinates (1,0,0)
 
         # Check if P in vertex region outside B
@@ -95,7 +95,7 @@ class Simplex:
         d3 = glm.dot(ab, bp)
         d4 = glm.dot(ac, bp)
         if d3 >= 0.0 and d4 <= d3:
-            self._keep_indices = (bi)
+            self._keep_indices = (bi,)
             return b # barycentric coordinates (0,1,0)
 
         # Check if P in edge region of AB, if so return projection of P onto AB
@@ -110,7 +110,7 @@ class Simplex:
         d5 = glm.dot(ab, cp)
         d6 = glm.dot(ac, cp)
         if d6 >= 0.0 and d5 <= d6:
-            self._keep_indices = (ci)
+            self._keep_indices = (ci,)
             return c # barycentric coordinates (0,0,1)
                 
         # Check if P in edge region of AC, if so return projection of P onto AC
@@ -187,13 +187,13 @@ class Simplex:
 
 def debug_tests():
     simplex = Simplex()
-    simplex.add_point(glm.vec3(1), (0, 2))   
-    simplex.add_point(glm.vec3(2), (0, 2))   
-    simplex.add_point(glm.vec3(3), (0, 2))   
+    simplex.add_point(glm.vec3(0, 0, 0), (0, 0))   
+    simplex.add_point(glm.vec3(1, 0, 0), (0, 0))   
+    simplex.add_point(glm.vec3(1, 1, 0), (0, 0))   
     print(simplex)
 
-    simplex._Simplex__prune_redundant_verts()
-    print(simplex.verts)
+    q = simplex.find_closest_point_on_simplex(glm.vec3(2, 3, 0))
+    print(q)
 
 if __name__ == "__main__":
     debug_tests()

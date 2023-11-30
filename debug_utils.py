@@ -27,8 +27,9 @@ class DebugPlotter:
         plt.grid()
         
         for poly_verts, poly_color in zip(self.polygons, self.polygon_colors):
-            p = Polygon(poly_verts, facecolor=poly_color, alpha=0.2)
-            self.ax.add_patch(p)
+            if len(poly_verts) > 2:
+                p = Polygon(poly_verts, facecolor=poly_color, alpha=0.2)
+                self.ax.add_patch(p)
 
             #draw points 
             xs, ys = zip(*poly_verts)
@@ -37,7 +38,7 @@ class DebugPlotter:
             # draw contour
             xs, ys = xs+(xs[0],), ys+(ys[0],)
             plt.plot(xs, ys)
-
+        plt.axis('equal')
         plt.show()
 
     def __compute_limits(self, axis=0, padding=1):
