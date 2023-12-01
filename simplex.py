@@ -159,7 +159,7 @@ class Simplex:
         # start out assuming point inside all halfspaces, so closest to itself
         closest_pt = p
         best_sq_dist = sys.float_info.max 
-        ret_indices, ret_barycentric = (), ()
+        ret_indices, ret_barycentric = (0, 1, 2, 3), (0.25, 0.25, 0.25, 0.25)
 
         # if point outside face abc then compute closest point on abc
         if self.__point_outside_of_plane(p, a, b, c, d):

@@ -61,8 +61,8 @@ class PhysicsObject:
         return self.rot * (local_dir / self.scale)
 
     def dir_to_local(self, global_dir: glm.vec3) -> glm.vec3:
-        # required matrix is S^-1 * R^T
-        return (glm.transpose(self.rot) * global_dir) / self.scale; 
+        # required matrix is S * R^T
+        return (glm.transpose(self.rot) * global_dir) * self.scale; 
 
     def point_to_global(self, local_point: glm.vec3) -> glm.vec3:
         # pg = R * S * lp + t 

@@ -108,7 +108,7 @@ class DebugVisualizer3D:
 
         # lets try to run gjk 
         ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1])
-        print (ret)
+        print(ret)
 
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")

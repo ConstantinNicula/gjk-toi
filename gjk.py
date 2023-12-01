@@ -23,12 +23,12 @@ class GJKCollisionDetector:
         hit = False
         iter = 0
         while iter < self.max_num_iters: 
-            #print(f"---- Iter {iter}, simplex verts {len(simplex.verts)} --- ")
+            print(f"---- Iter {iter}, simplex verts {len(simplex.verts)} --- ")
             # 1.1) compute closest point to CH of simplex, and reduce simplex
             p = simplex.find_closest_point_on_simplex()
 
             # 1.2) if p is the origin, exit (collision case)
-            if glm.dot(p, p) < 1e-12:
+            if glm.dot(p, p) < self.min_dist_eps **2: 
                 hit = True
                 break
 
@@ -41,7 +41,7 @@ class GJKCollisionDetector:
             simplex.add_point(v, verts_idx)
             iter +=1
 
-        #print(f"------ Exit in {iter+1} iterations -----")
+        print(f"------ Exit in {iter+1} iterations -----")
 
         # 2) (EPA or similar is needed to extract contact normal) and surface points 
         # Use barycentric coordinates in simplex to compute collision mesh points 
