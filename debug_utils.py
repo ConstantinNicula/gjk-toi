@@ -1,66 +1,13 @@
-import numpy as np 
-import matplotlib.pyplot as plt 
-from matplotlib.patches import Polygon 
+import glm, glm_utils
+import math, time
+import trimesh
+from collections import namedtuple
 
 import pyqtgraph as pg 
 from pyqtgraph.dockarea import *
 import pyqtgraph.opengl as gl 
 from PyQt5 import QtWidgets, QtGui, QtCore
-from collections import namedtuple
-import glm_utils
-import glm
-import math
-import time
-import trimesh
 
-class DebugPlotter: 
-    def __init__(self, x_bounds=None, y_bounds=None):
-        self.fig, self.ax = plt.subplots()
-        self.x_bounds = x_bounds
-        self.y_bounds = y_bounds
-        self.polygons = []
-        self.polygon_colors = []
-
-    def add_poly(self, verts, color): 
-        self.polygons.append(verts)  
-        # todo chose random color  
-        self.polygon_colors.append(color)
-
-    def display(self): 
-        if not self.x_bounds:
-            self.x_bounds = self.__compute_limits(0)
-        self.ax.set_xlim(self.x_bounds)
-
-        if not self.y_bounds:
-            self.y_bounds = self.__compute_limits(1)
-        self.ax.set_ylim(self.y_bounds)
-
-        plt.grid()
-        
-        for poly_verts, poly_color in zip(self.polygons, self.polygon_colors):
-            if len(poly_verts) > 2:
-                p = Polygon(poly_verts, facecolor=poly_color, alpha=0.2)
-                self.ax.add_patch(p)
-
-            #draw points 
-            xs, ys = zip(*poly_verts)
-            plt.scatter(xs, ys)
-
-            # draw contour
-            xs, ys = xs+(xs[0],), ys+(ys[0],)
-            plt.plot(xs, ys)
-        plt.axis('equal')
-        plt.show()
-
-    def __compute_limits(self, axis=0, padding=1):
-        # stack all points and find min max 
-        all_pts = np.vstack(self.polygons)
-        min, max = np.min(all_pts[:, axis]), np.max(all_pts[:, axis])
-        min = np.floor(min) - padding
-        max = np.ceil(max) + padding
-        print(min, max) 
-        return min, max 
-    
 class SuperSpinner(QtWidgets.QDoubleSpinBox):
     def __init__(self):
         super(SuperSpinner, self).__init__()
@@ -107,7 +54,7 @@ class DebugVisualizer3D:
         # create dock for 3d viewport 
         self.scene = SceneController("3D View", self.area, location='left') 
         
-        # create a settings dock (should be separate class)
+        # create a settings controllers for both objects
         callback_a = lambda object_state: self.object_state_change(0, object_state)
         self.obj_a_settings = ObjectSettingsController("Object A Settings", self.area, callback_a, location='right')
         callback_b = lambda object_state: self.object_state_change(1, object_state)
@@ -119,6 +66,9 @@ class DebugVisualizer3D:
         # display window  
         self.win.show()
         self.last_time = time.time()
+
+    def __create_physics_object(self, ):
+        pass 
 
     def object_state_change(self, object_id:int, object_state:ObjectState):
         print (object_id, object_state)

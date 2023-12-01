@@ -1,29 +1,13 @@
 import numpy as np 
-import glm
-from debug_utils import DebugPlotter, DebugVisualizer3D
-from extras.minkowski import MinkowskiMesh2D
+import glm, glm_utils
+import random, time 
+
+from debug_utils import DebugVisualizer3D
 from simplex import Simplex
 from collision_mesh import CollisionMesh
 from gjk import GJKCollisionDetector
 from physics_object import PhysicsObject
 
-import time 
-import random
-import glm_utils
-
-def test_minkowski():
-    p1 = np.array([ [1, 1], [2, 1], [2, 2], [1, 2], [0.5, 1.5]])
-    p2 = np.array([ [2, 3], [3, 1], [1, 1]])
-    p3 = np.array([ [5, 5], [7, 7]])
-
-    plotter = DebugPlotter()
-    plotter.add_poly(p1, "k")
-    plotter.add_poly(p2, "k")
-    #plotter.add_poly(p3, "r")
-
-    mdiff = MinkowskiMesh2D(p2, p1)
-    plotter.add_poly(mdiff.mesh, "b")
-    plotter.display()
 
 def random_2d_point():
     return [random.uniform(-2, 2), random.uniform(-2, 2)] 

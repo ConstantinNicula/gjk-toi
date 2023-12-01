@@ -5,13 +5,18 @@ from collision_mesh import CollisionMesh
 
 class PhysicsObject:
     def __init__(self, collision_mesh: CollisionMesh, 
-                    rot: glm.mat3 = glm.mat3(1.0), pos: glm.vec3 = glm.vec3(0.0), 
-                    vel: glm.vec3 = glm.vec3(0.0), accel: glm.vec3 = glm.vec3(0.0)):
+                    scale: glm.vec3 = glm.vec3(1.0), rot: glm.mat3 = glm.mat3(1.0), 
+                    pos: glm.vec3 = glm.vec3(0.0), vel: glm.vec3 = glm.vec3(0.0), 
+                    accel: glm.vec3 = glm.vec3(0.0)):
+
         self.collision_mesh = collision_mesh
 
+        # static properties 
+        self.scale = scale
         self.rot = rot
-        self.pos = pos
 
+        # dynamic properties 
+        self.pos = pos
         self.vel = vel
         self.accel = accel
 
@@ -22,11 +27,18 @@ class PhysicsObject:
     def set_rotation_euler(self, degx: float, degy: float, degz: float):
         self.rot = glm_utils.rotation_from_euler(degx, degy, degz)
 
-    def set_position(self, pos:glm.vec3):
+    def set_scale(self, scale: glm.vec3): 
+        self.scale = scale 
+
+    def set_position(self, pos: glm.vec3):
         self.pos = pos 
+
+    def set_velocity(self, vel: glm.vec3):
+        self.vel = vel
  
     def update(self, dt: float):
         self.pos = self.pos + self.vel * dt + 0.5 * self.accel * dt**2 
+        self.vel = self.vel + self.accel * dt
 
     def get_support_point(self, global_dir: glm.vec3) -> tuple[glm.vec3, int]:
         # convert direction to local rf  
@@ -35,23 +47,31 @@ class PhysicsObject:
         p, idx = self.collision_mesh.get_support_point(local_dir)
         # get point in global rf
         return (self.point_to_global(p), idx)
+
+    def get_glm_transform(self) -> glm.mat4:
+        return glm.translate(self.pos) * glm.scale(self.scale) * glm.mat4(self.rot)     
     
     # utility functions for transformations 
-    def dir_to_local(self, global_dir: glm.vec3) -> glm.vec3:
-        return glm.transpose(self.rot) * global_dir 
-
     def dir_to_global(self, local_dir: glm.vec3) -> glm.vec3:
-        return self.rot * local_dir
+        # (M^-1)^T = ((R*S)^-1)^T = (S^-1 * R^T) ^T = R * S^-1 
+        # element-wise division (local_dir / self.pos) = dx/sx, dy/sy, dz/sz
+        return self.rot * (local_dir / self.pos)
+
+    def dir_to_local(self, global_dir: glm.vec3) -> glm.vec3:
+        # required matrix is S^-1 * R^T
+        return (glm.transpose(self.rot) * global_dir) / self.scale; 
 
     def point_to_global(self, local_point: glm.vec3) -> glm.vec3:
-        return self.rot * local_point + self.pos
+        # pg = R * S * lp + t 
+        return self.rot * (self.scale * local_point) + self.pos
 
     def point_to_local(self, global_point: glm.vec3) -> glm.vec3:
-        return glm.transpose(self.rot) * (global_point - self.pos) 
+        # pl = S^-1*R^T * (pg - t)
+        return (glm.transpose(self.rot) * (global_point - self.pos)) / self.scale 
 
     # debugging 
     def get_transformed_mesh_vert(self, vert_idx: int) -> glm.vec3:
         return self.point_to_global(self.collision_mesh[vert_idx]) 
 
     def get_transformed_mesh(self) -> list[glm.vec3]:
-        return self.collision_mesh.get_transformed_verts(self.rot, self.pos) 
+        return self.collision_mesh.get_transformed_verts(self.rot, self.scale, self.pos) 
