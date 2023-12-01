@@ -6,7 +6,7 @@ class CollisionMesh:
         Create a collision mesh from a list of vertices 
     """
     def __init__(self, verts: list[glm.vec3]):
-        self.verts = verts  
+        self.verts = verts 
     
     """
         Loop through all verts in collision mesh and find the furthest one in direction of support_dir

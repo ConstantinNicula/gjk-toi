@@ -1,8 +1,14 @@
-import glm, glm_utils
+import glm, trimesh
 import math, time
-import trimesh
 from collections import namedtuple
 
+# own libs
+import glm_utils
+from physics_object import PhysicsObject
+from collision_mesh import CollisionMesh
+from gjk import GJKCollisionDetector, CollisionData
+
+# display stuff
 import pyqtgraph as pg 
 from pyqtgraph.dockarea import *
 import pyqtgraph.opengl as gl 
@@ -60,23 +66,50 @@ class DebugVisualizer3D:
         callback_b = lambda object_state: self.object_state_change(1, object_state)
         self.obj_b_settings = ObjectSettingsController("Object B Settings", self.area, callback_b, location='bottom', ref_dock=self.obj_a_settings.dock)
 
-        # temp
-        self.object_a_mesh = self.scene.create_cylinder_object() 
+        # TO DO: add other settings controllers 
 
+        # storage for internal data  
+        self.physics_objects = []
+        self.__add_physics_object(self.obj_a_settings.state_values)
+        self.__add_physics_object(self.obj_b_settings.state_values)
+
+        self.collision_detector = GJKCollisionDetector()
+         
         # display window  
         self.win.show()
         self.last_time = time.time()
 
-    def __create_physics_object(self, ):
-        pass 
+    def __add_physics_object(self, state: ObjectState):
+        # to do allow selecting type
+        display_mesh_item, mesh_vertices = self.scene.create_cylinder_object() 
+        collision_mesh = CollisionMesh(glm_utils.to_glm_vec_list(mesh_vertices))
+        physics_object = PhysicsObject(collision_mesh)
+
+        self.__update_object_state(display_mesh_item, physics_object, state)
+        self.physics_objects.append(physics_object)
+
+    def __update_object_state(self, display_mesh_item: gl.GLMeshItem, physics_object: PhysicsObject, state:ObjectState):
+        physics_object.set_rotation(glm_utils.rotation_from_euler(*state.rotation)) 
+        physics_object.set_scale(glm_utils.to_glm_vec(state.scale)) 
+        physics_object.set_position(glm_utils.to_glm_vec(state.position)) 
+        physics_object.set_velocity(glm_utils.to_glm_vec(state.velocity)) 
+
+        transform = glm.transpose(physics_object.get_glm_transform()) 
+        display_mesh_item.setTransform(transform.to_tuple())
+ 
 
     def object_state_change(self, object_id:int, object_state:ObjectState):
         print (object_id, object_state)
-        # to do update physics object 
-        # update meshes
-        translation = glm_utils.to_glm_vec(object_state.position)
-        transform = glm.transpose(glm.translate(translation)) 
-        self.object_a_mesh.setTransform(transform.to_tuple())
+
+        # perform position update  
+        mesh_item = self.scene.object_meshes[object_id]
+        physics_object = self.physics_objects[object_id]
+        self.__update_object_state(mesh_item, physics_object, object_state)
+
+        # lets try to run gjk 
+        ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1])
+        print (ret)
+
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")
         self.last_time = curr_time
@@ -88,6 +121,8 @@ class DebugVisualizer3D:
         pass 
     def display(self):
         self.app.exec_()
+
+
 
 class SceneController:
     def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (3, 3), location:str = 'left'):
@@ -106,24 +141,27 @@ class SceneController:
 
         # storage for render objects 
         self.object_meshes = []
-        self.meshes = []
-        self.lines = []
+        self.debug_meshes = []
+        self.debug_lines = []
 
-    def add_trimesh(self, mesh: trimesh.Trimesh) -> gl.GLMeshItem:
+    def __create_trimesh(self, mesh: trimesh.Trimesh) -> gl.GLMeshItem:
         mesh_data = gl.MeshData(mesh.vertices, mesh.faces[:, ::-1])
         mesh_item = gl.GLMeshItem(meshdata = mesh_data, drawFaces = True, smooth = False, computeNormals = True, shader='shaded')
         self.view_widget.addItem(mesh_item)
-        self.meshes.append(mesh_item)
         return mesh_item 
 
     def create_cylinder_object(self) -> gl.GLMeshItem:
         cylinder_mesh = trimesh.creation.cylinder(1, 1, 20)
-        return self.add_trimesh(cylinder_mesh)
+        mesh_item = self.__create_trimesh(cylinder_mesh)
+        self.object_meshes.append(mesh_item)
+        return mesh_item, cylinder_mesh.vertices.tolist()
 
     def create_cube_object(self) -> gl.GLMeshItem:
         box_mesh = trimesh.creation.box(extents=[1.0, 1.0, 1.0])
-        return self.add_trimesh(box_mesh)
-    
+        mesh_item = self.__create_trimesh(box_mesh)
+        self.object_meshes.append(mesh_item)
+        return mesh_item
+
 class ObjectSettingsController:
     # define ranges 
     min_rot, max_rot = (-180, -180, -180), (180, 180, 180)
@@ -225,3 +263,11 @@ def _add_labeled_vec3_field(parent_layout: pg.LayoutWidget,
 
     return tuple(tboxes)
 
+
+
+def main():
+    debug_visualizer = DebugVisualizer3D("Test")
+    debug_visualizer.display()
+
+if __name__ == "__main__":
+    main()

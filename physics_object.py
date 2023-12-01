@@ -35,6 +35,9 @@ class PhysicsObject:
 
     def set_velocity(self, vel: glm.vec3):
         self.vel = vel
+
+    def set_accel(self, accel:glm.vec3):
+        self.accel = accel
  
     def update(self, dt: float):
         self.pos = self.pos + self.vel * dt + 0.5 * self.accel * dt**2 
@@ -49,13 +52,13 @@ class PhysicsObject:
         return (self.point_to_global(p), idx)
 
     def get_glm_transform(self) -> glm.mat4:
-        return glm.translate(self.pos) * glm.scale(self.scale) * glm.mat4(self.rot)     
+        return glm.translate(self.pos) * glm.mat4(self.rot) * glm.scale(self.scale)     
     
     # utility functions for transformations 
     def dir_to_global(self, local_dir: glm.vec3) -> glm.vec3:
         # (M^-1)^T = ((R*S)^-1)^T = (S^-1 * R^T) ^T = R * S^-1 
-        # element-wise division (local_dir / self.pos) = dx/sx, dy/sy, dz/sz
-        return self.rot * (local_dir / self.pos)
+        # element-wise division (local_dir / self.scale) = dx/sx, dy/sy, dz/sz
+        return self.rot * (local_dir / self.scale)
 
     def dir_to_local(self, global_dir: glm.vec3) -> glm.vec3:
         # required matrix is S^-1 * R^T

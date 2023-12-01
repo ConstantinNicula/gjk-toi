@@ -2,7 +2,7 @@ import numpy as np
 import glm, glm_utils
 import random, time 
 
-from debug_utils import DebugVisualizer3D
+from extras.debug_utils_2d import DebugPlotter
 from simplex import Simplex
 from collision_mesh import CollisionMesh
 from gjk import GJKCollisionDetector
@@ -67,14 +67,6 @@ def test_gjk():
 
     print(ret)
 
-def test_3d_vis():
-    debug_visualizer = DebugVisualizer3D("Test")
-    debug_visualizer.display()
-
-
-
 if __name__ == "__main__":
-    #test_minkowski()
     #test_simplex()
-    #test_gjk()
-    test_3d_vis()
+    test_gjk()
