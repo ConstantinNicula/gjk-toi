@@ -1,7 +1,7 @@
 import numpy as np 
 import glm
 from debug_utils import DebugPlotter, DebugVisualizer3D
-from minkowski import MinkowskiMesh2D
+from extras.minkowski import MinkowskiMesh2D
 from simplex import Simplex
 from collision_mesh import CollisionMesh
 from gjk import GJKCollisionDetector

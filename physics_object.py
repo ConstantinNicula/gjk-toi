@@ -26,7 +26,7 @@ class PhysicsObject:
         self.pos = pos 
  
     def update(self, dt: float):
-        self.pos = self.pos + self.vel * dt + self.accel * dt**2 
+        self.pos = self.pos + self.vel * dt + 0.5 * self.accel * dt**2 
 
     def get_support_point(self, global_dir: glm.vec3) -> tuple[glm.vec3, int]:
         # convert direction to local rf  

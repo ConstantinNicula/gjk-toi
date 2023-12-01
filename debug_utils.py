@@ -6,6 +6,12 @@ import pyqtgraph as pg
 from pyqtgraph.dockarea import *
 import pyqtgraph.opengl as gl 
 from PyQt5 import QtWidgets, QtGui, QtCore
+from collections import namedtuple
+import glm_utils
+import glm
+import math
+import time
+import trimesh
 
 class DebugPlotter: 
     def __init__(self, x_bounds=None, y_bounds=None):
@@ -54,7 +60,33 @@ class DebugPlotter:
         max = np.ceil(max) + padding
         print(min, max) 
         return min, max 
+    
+class SuperSpinner(QtWidgets.QDoubleSpinBox):
+    def __init__(self):
+        super(SuperSpinner, self).__init__()
 
+        self.mouseStartPosY = 0
+        self.startValue = 0
+
+    def mousePressEvent(self, e):
+        super(SuperSpinner, self).mousePressEvent(e)
+        self.mouseStartPosY = e.pos().y()
+        self.startValue = self.value()
+
+    def mouseMoveEvent(self, e):
+        self.setCursor(QtCore.Qt.SizeVerCursor)
+
+        delta = self.mouseStartPosY - e.pos().y()
+        valueOffsetExp =  math.pow(1.015, abs(delta)) -1.0
+        valueOffset = math.copysign(1, delta) * valueOffsetExp
+        self.setValue(self.startValue + valueOffset)
+
+    def mouseReleaseEvent(self, e):
+        super(SuperSpinner, self).mouseReleaseEvent(e)
+        self.unsetCursor()
+
+
+ObjectState = namedtuple("ObjectState", ["rotation", "scale", "position", "velocity"])
 
 class DebugVisualizer3D: 
     def __init__(self, name):
@@ -73,15 +105,32 @@ class DebugVisualizer3D:
         self.win.resize(1200, 700)
 
         # create dock for 3d viewport 
-        self.scene = SceneDock("3D View", self.area, location='left') 
+        self.scene = SceneController("3D View", self.area, location='left') 
         
         # create a settings dock (should be separate class)
-        self.obj_a_settings = SettingsDock("Object A Settings", self.area, location='right')
-        self.obj_b_settings = SettingsDock("Object B Settings", self.area, location='bottom', ref_dock=self.obj_a_settings.dock)
-        
+        callback_a = lambda object_state: self.object_state_change(0, object_state)
+        self.obj_a_settings = ObjectSettingsController("Object A Settings", self.area, callback_a, location='right')
+        callback_b = lambda object_state: self.object_state_change(1, object_state)
+        self.obj_b_settings = ObjectSettingsController("Object B Settings", self.area, callback_b, location='bottom', ref_dock=self.obj_a_settings.dock)
+
+        # temp
+        self.object_a_mesh = self.scene.create_cylinder_object() 
+
         # display window  
         self.win.show()
+        self.last_time = time.time()
 
+    def object_state_change(self, object_id:int, object_state:ObjectState):
+        print (object_id, object_state)
+        # to do update physics object 
+        # update meshes
+        translation = glm_utils.to_glm_vec(object_state.position)
+        transform = glm.transpose(glm.translate(translation)) 
+        self.object_a_mesh.setTransform(transform.to_tuple())
+        curr_time = time.time()
+        print (f"elapsed {curr_time - self.last_time}s")
+        self.last_time = curr_time
+    
     def create_3d_view_dock(self):
         pass 
 
@@ -90,7 +139,7 @@ class DebugVisualizer3D:
     def display(self):
         self.app.exec_()
 
-class SceneDock:
+class SceneController:
     def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (3, 3), location:str = 'left'):
         # create a dock and pin it to the parent
         self.dock = Dock(name, parent_area, size)
@@ -105,12 +154,33 @@ class SceneDock:
         grid.scale(2, 2, 1)
         self.view_widget.addItem(grid)
 
-        # holder for additional widgets
+        # storage for render objects 
+        self.object_meshes = []
         self.meshes = []
         self.lines = []
 
-class SettingsDock:
-    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (1,1), location:str = 'right', ref_dock:Dock|None = None):
+    def add_trimesh(self, mesh: trimesh.Trimesh) -> gl.GLMeshItem:
+        mesh_data = gl.MeshData(mesh.vertices, mesh.faces[:, ::-1])
+        mesh_item = gl.GLMeshItem(meshdata = mesh_data, drawFaces = True, smooth = False, computeNormals = True, shader='shaded')
+        self.view_widget.addItem(mesh_item)
+        self.meshes.append(mesh_item)
+        return mesh_item 
+
+    def create_cylinder_object(self) -> gl.GLMeshItem:
+        cylinder_mesh = trimesh.creation.cylinder(1, 1, 20)
+        return self.add_trimesh(cylinder_mesh)
+
+    def create_cube_object(self) -> gl.GLMeshItem:
+        box_mesh = trimesh.creation.box(extents=[1.0, 1.0, 1.0])
+        return self.add_trimesh(box_mesh)
+    
+class ObjectSettingsController:
+    # define ranges 
+    min_rot, max_rot = (-180, -180, -180), (180, 180, 180)
+    min_scale, max_scale = (0, 0, 0), (10, 10, 10)
+    min_vals, max_vals = (-1000, -1000, -1000), (1000, 1000, 100)
+        
+    def __init__(self, name: str, parent_area: DockArea, update_callback,  size:tuple[int, int] = (1,1), location:str = 'right', ref_dock:Dock|None = None):
         # create a dock and pin it to the parent 
         self.dock = Dock(name, parent_area, size)
         if not ref_dock: 
@@ -122,51 +192,42 @@ class SettingsDock:
         self.layout = pg.LayoutWidget()
         self.dock.addWidget(self.layout)
 
-        # add settings fields
-        min_rot, max_rot = (-180, -180, -180), (180, 180, 180)
-        min_scale, max_scale = (0, 0, 0), (10, 10, 10)
-        min_vals, max_vals = (-1000, -1000, -1000), (1000, 1000, 100)
+        # state storage 
+        self.state_values = ObjectState((0.0, 0.0,0.0), (1.0, 1.0, 1.0), (9.0, 0.0,0.0), (0.0, 0.0,0.0)) 
 
-        self.rotation_data = _add_labeled_vec3_field(self.layout, "Rotation:",min_rot, max_rot , (0, 0, 0), self.__read_all_data)
-        self.scale =_add_labeled_vec3_field(self.layout, "Scale:", min_scale, max_scale, (1.0, 1.0, 1.0), self.__read_all_data)
-        self.position_data =_add_labeled_vec3_field(self.layout, "Initial position:", min_vals, max_vals, (0, 0, 0), self.__read_all_data)
-        self.velocity_data = _add_labeled_vec3_field(self.layout, "Initial velocity:", min_vals, max_vals, (0, 0, 0), self.__read_all_data)
-       
-    def __read_vec_data(self, vec_fields: tuple[QtWidgets.QLineEdit]): 
-        return 
-        read_f = lambda tb: float(tb.text())
-        return list(map(read_f, vec_fields))
+        # create controllers 
+        self.rotation_controller = _add_labeled_vec3_field(self.layout, "Rotation:",self.min_rot, self.max_rot,self.state_values.rotation, self.__read_all_data)
+        self.scale_controller =_add_labeled_vec3_field(self.layout, "Scale:", self.min_scale, self.max_scale, self.state_values.scale, self.__read_all_data)
+        self.position_controller =_add_labeled_vec3_field(self.layout, "Initial position:", self.min_vals, self.max_vals, self.state_values.position, self.__read_all_data)
+        self.velocity_controller = _add_labeled_vec3_field(self.layout, "Initial velocity:", self.min_vals, self.max_vals, self.state_values.velocity, self.__read_all_data)
+
+        # notify parent that state has changed 
+        self.update_callback = update_callback 
+
+    def __read_vec_data(self, vec_fields: tuple[SuperSpinner]): 
+        read_spinner = lambda spinner: float(spinner.value())
+        return tuple(map(read_spinner, vec_fields))
     
     def __read_all_data(self, unused):
-        return
-        data_fields = (self.rotation_data, self.scale, self.position_data, self.velocity_data)
-        return tuple(map(self.__read_vec_data, data_fields)) 
+        self.state_values = ObjectState(
+            self.__read_vec_data(self.rotation_controller),
+            self.__read_vec_data(self.scale_controller), 
+            self.__read_vec_data(self.position_controller), 
+            self.__read_vec_data(self.velocity_controller) 
+        )
+        self.update_callback(self.state_values) 
 
-    def __create_object_properties_dock(self, name:str, callback_fn) -> Dock:
-        pass 
-    
-class SuperSpinner(QtWidgets.QDoubleSpinBox):
-    def __init__(self):
-        super(SuperSpinner, self).__init__()
+    def __update_controller(self, target_state: tuple[float], controller: tuple[SuperSpinner]):
+        for field_controller, target_state in zip(controller, target_state):
+            field_controller.setValue(target_state)
 
-        self.mouseStartPosY = 0
-        self.startValue = 0
+    def set_state(self, state: ObjectState): 
+        self.state_values = state
+        self.__update_controller(state.rotation, self.rotation_controller)
+        self.__update_controller(state.scale, self.scale_controller)
+        self.__update_controller(state.position, self.position_controller)
+        self.__update_controller(state.velocity, self.velocity_controller)
 
-    def mousePressEvent(self, e):
-        super(SuperSpinner, self).mousePressEvent(e)
-        self.mouseStartPosY = e.pos().y()
-        self.startValue = self.value()
-
-    def mouseMoveEvent(self, e):
-        self.setCursor(QtCore.Qt.SizeVerCursor)
-
-        multiplier = .02
-        valueOffset = (self.mouseStartPosY - e.pos().y()) * multiplier
-        self.setValue(self.startValue + valueOffset)
-
-    def mouseReleaseEvent(self, e):
-        super(SuperSpinner, self).mouseReleaseEvent(e)
-        self.unsetCursor()
 
 def _create_float_field(range: tuple[float, float], default_value:float, callback) -> SuperSpinner:
     super_spin = SuperSpinner()
@@ -175,6 +236,7 @@ def _create_float_field(range: tuple[float, float], default_value:float, callbac
     super_spin.setLocale(QtCore.QLocale("en_US"))
     super_spin.setSingleStep(0.01)
     super_spin.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+    super_spin.setValue(default_value)
     super_spin.valueChanged.connect(callback)
     return super_spin
 
