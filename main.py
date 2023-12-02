@@ -88,7 +88,7 @@ class DebugVisualizer3D:
         ))
 
         self.obj_b_settings.set_state(ObjectState(
-            (-48.01, -13.57, 37.68),
+            (-52.31, -13.57, 37.68),
             (1.86, 0.61, 1.77),
             (10.33, -0.91, 1.13),
             (0.00, 0.00, 0.62)

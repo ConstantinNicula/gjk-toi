@@ -6,7 +6,7 @@ from physics_object import PhysicsObject
 CollisionData = namedtuple("CollisionData", ["hit", "simplex", "closest_points"])
 
 class GJKCollisionDetector:
-    def __init__(self, min_dist_eps: float = 1e-4, max_num_iters: int = 16, debug: bool = False):
+    def __init__(self, min_dist_eps: float = 1e-5, max_num_iters: int = 16, debug: bool = False):
         self.min_dist_eps = min_dist_eps
         self.max_num_iters = max_num_iters
         self.debug = debug
@@ -26,24 +26,29 @@ class GJKCollisionDetector:
             print(f"---- Iter {iter}, simplex verts {len(simplex.verts)} --- ")
             # 1.1) compute closest point to CH of simplex, and reduce simplex
             p = simplex.find_closest_point_on_simplex()
-            p_d = glm.length2(p)
-
+            d_p_sq = glm.length2(p)
+            
+            print("contains origin test: ", d_p_sq, self.min_dist_eps**2, p) 
             # 1.2) if p is the origin, exit (collision case)
-            if p_d < self.min_dist_eps**2: 
+            if d_p_sq < self.min_dist_eps**2: 
                 hit = True
                 break
 
             # 1.3) get a new support point v in direction of -p
             v, vert_idx = self.__get_minkowski_vert(obj_a, obj_b, -p)
-            v_d = glm.dot(v, p)
-            print(p_d, v_d)
-            if simplex.check_contains(vert_idx) or v_d >= p_d:
+            not_advancing = (d_p_sq - glm.dot(v, p)) < self.min_dist_eps**2
+            already_seen_point = simplex.check_contains(vert_idx)
+            print("miss conditions: ", not_advancing, already_seen_point) 
+            # 1.4) reduce simplex to smallest subset that contains p 
+            simplex.reduce()
+
+            # 1.5) early exit case 
+            if already_seen_point or not_advancing:
                 break # going nowhere just exit
-            
-            # 1.4) add point to simplex 
+
+            # 1.6) add new point v to simplex 
             simplex.add_point(v, vert_idx)
             iter +=1
-
             print(simplex.verts_idx, simplex.sub_simplex_indices, simplex.barycentric_coords)
         print(f"------ Exit in {iter+1} iterations -----")
 
