@@ -18,17 +18,15 @@ class GJKCollisionDetector:
             dir = glm.normalize(obj_b.pos - obj_a.pos)
             p, verts_idx = self.__get_minkowski_vert(obj_a, obj_b, dir)
             simplex.add_point(p, verts_idx)
-
+        
         # 1) Search for collision upto  max number of iters 
         hit = False
         iter = 0
         while iter < self.max_num_iters: 
-            print(f"---- Iter {iter}, simplex verts {len(simplex.verts)} --- ")
             # 1.1) compute closest point to CH of simplex, and reduce simplex
             p = simplex.find_closest_point_on_simplex()
             d_p_sq = glm.length2(p)
             
-            print("contains origin test: ", d_p_sq, self.min_dist_eps**2, p) 
             # 1.2) if p is the origin, exit (collision case)
             if d_p_sq < self.min_dist_eps**2: 
                 hit = True
@@ -38,7 +36,7 @@ class GJKCollisionDetector:
             v, vert_idx = self.__get_minkowski_vert(obj_a, obj_b, -p)
             not_advancing = (d_p_sq - glm.dot(v, p)) < self.min_dist_eps**2
             already_seen_point = simplex.check_contains(vert_idx)
-            print("miss conditions: ", not_advancing, already_seen_point) 
+
             # 1.4) reduce simplex to smallest subset that contains p 
             simplex.reduce()
 
@@ -49,7 +47,6 @@ class GJKCollisionDetector:
             # 1.6) add new point v to simplex 
             simplex.add_point(v, vert_idx)
             iter +=1
-            print(simplex.verts_idx, simplex.sub_simplex_indices, simplex.barycentric_coords)
         print(f"------ Exit in {iter+1} iterations -----")
 
         # 2) (EPA or similar is needed to extract contact normal) and surface points 

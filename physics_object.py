@@ -74,7 +74,7 @@ class PhysicsObject:
 
     # debugging 
     def get_transformed_mesh_vert(self, vert_idx: int) -> glm.vec3:
-        return self.point_to_global(self.collision_mesh[vert_idx]) 
+        return self.point_to_global(self.collision_mesh.verts[vert_idx]) 
 
     def get_transformed_mesh(self) -> list[glm.vec3]:
         return self.collision_mesh.get_transformed_verts(self.rot, self.scale, self.pos) 

@@ -7,6 +7,7 @@ import glm_utils
 from physics_object import PhysicsObject
 from collision_mesh import CollisionMesh
 from gjk import GJKCollisionDetector, CollisionData
+from simplex import Simplex
 
 # display stuff
 import pyqtgraph as pg 
@@ -74,7 +75,7 @@ class DebugVisualizer3D:
         self.__add_physics_object(self.obj_b_settings.state_values)
 
         self.collision_detector = GJKCollisionDetector()
-
+        self.prev_simplex_idx = None
         # display window  
         self.win.show()
         self.last_time = time.time()
@@ -124,17 +125,30 @@ class DebugVisualizer3D:
         self.__update_object_state(mesh_item, physics_object, object_state)
 
         # lets try to run gjk 
-        ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1])
+        starting_simplex = None 
+        if self.prev_simplex_idx:
+            starting_simplex = self.__construct_simplex_from_indices(self.physics_objects[0], self.physics_objects[1], self.prev_simplex_idx) 
+        ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1], starting_simplex)
+        self.prev_simplex_idx = ret.simplex.verts_idx
         print(ret)
 
         # display closest points
-        pts = glm_utils.to_3d_point_list(ret.closest_points)
-        self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
+        if not ret.hit: 
+            pts = glm_utils.to_3d_point_list(ret.closest_points)
+            self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
 
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")
         self.last_time = curr_time
-    
+
+    def __construct_simplex_from_indices(self, object_a: PhysicsObject, object_b: PhysicsObject, verts_idx: list[tuple[int]])-> Simplex:  
+        simplex = Simplex()
+        for vert_a_idx, vert_b_idx in verts_idx:
+            minkowski_vert = object_a.get_transformed_mesh_vert(vert_a_idx) \
+                             - object_b.get_transformed_mesh_vert(vert_b_idx) 
+            simplex.add_point(minkowski_vert, (vert_a_idx, vert_b_idx))
+        return simplex
+
     def create_3d_view_dock(self):
         pass 
 

@@ -80,72 +80,6 @@ class Simplex:
         barycentric = (1.0 - t, t)
         return a + t * ab, indices, barycentric
 
-    def __find_closest_point_on_triangle_opt(self, p: glm.vec3, ai: int = 0, bi: int = 1, ci: int = 2) -> tuple[glm.vec3, tuple[int], tuple[float]]:
-        # obtain relevant points 
-        a, b, c = self.verts[ai], self.verts[bi], self.verts[ci]
-        
-        # Check if P in vertex region outside A
-        ab = b - a
-        ac = c - a
-        ap = p - a
-
-        d1 = glm.dot(ab, ap)
-        d2 = glm.dot(ac, ap)
-        if d1 <= 0.0 and d2 <= 0.0:
-            indices = (ai,)
-            barycentric = (1.0,)
-            return a, indices, barycentric  # barycentric coordinates (1,0,0)
-
-        # Check if P in vertex region outside B
-        bp = p - b
-        d3 = glm.dot(ab, bp)
-        d4 = glm.dot(ac, bp)
-        if d3 >= 0.0 and d4 <= d3:
-            indices = (bi,)
-            barycentric = (1.0,)
-            return b, indices, barycentric # barycentric coordinates (0,1,0)
-
-        # Check if P in edge region of AB, if so return projection of P onto AB
-        vc = d1*d4 - d3*d2
-        if vc <= 0.0 and d1 >= 0.0 and d3 <= 0.0: 
-            v = d1 / (d1 - d3)
-            indices = (ai, bi)
-            barycentric = (1.0-v,v)
-            return a + v * ab, indices, barycentric # barycentric coordinates (1-v,v,0)
-        
-        # Check if P in vertex region outside C
-        cp = p - c
-        d5 = glm.dot(ab, cp)
-        d6 = glm.dot(ac, cp)
-        if d6 >= 0.0 and d5 <= d6:
-            indices = (ci,)
-            barycentric = (1.0,) 
-            return c, indices, barycentric # barycentric coordinates (0,0,1)
-                
-        # Check if P in edge region of AC, if so return projection of P onto AC
-        vb = d5*d2 - d1*d6
-        if vb <= 0.0 and d2 >= 0.0 and d6 <= 0.0:
-            w = d2 / (d2 - d6)
-            indices = (ai, ci)
-            barycentric = (1.0-w, w)
-            return a + w * ac, indices, barycentric  # barycentric coordinates (1-w,0,w)
-        
-        # Check if P in edge region of BC, if so return projection of P onto BC
-        va = d3*d6 - d5*d4
-        if va <= 0.0 and (d4 - d3) >= 0.0 and (d5 - d6) >= 0.0:
-            w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
-            indices = (bi, ci)
-            barycentric = (1.0-w, w)
-            return b + w * (c - b), indices, barycentric # barycentric coordinates (0,1-w,w)
-
-        # P inside face region. Compute Q through its barycentric coordinates (u,v,w)
-        denom = 1.0 / (va + vb + vc)
-        v = vb * denom
-        w = vc * denom
-        indices = (ai, bi, ci)
-        barycentric = (1.0-v-w, v, w)
-        return a + ab * v + ac * w, indices, barycentric # = u*a + v*b + w*c, u = va * denom = 1.0f - v - w
-
     def __find_closest_point_on_triangle(self, p: glm.vec3, ai: int = 0, bi: int = 1, ci: int = 2) -> tuple[glm.vec3, tuple[int], tuple[float]]:
         # obtain relevant points 
         a, b, c = self.verts[ai], self.verts[bi], self.verts[ci]
@@ -248,7 +182,6 @@ class Simplex:
         best_sq_dist = sys.float_info.max 
         ret_indices, ret_barycentric = (0, 1, 2, 3), (0.25, 0.25, 0.25, 0.25)
         
-        print("p: ", p)
         # if point outside face abc then compute closest point on abc
         if self.__point_outside_of_plane(p, a, b, c, d):
             q, indices, barycentric = self.__find_closest_point_on_triangle(p, ai, bi, ci)
@@ -257,7 +190,6 @@ class Simplex:
                 best_sq_dist, closest_pt = sq_dist, q
                 ret_indices, ret_barycentric = indices, barycentric
         
-        print("abc: ", closest_pt)         
         # Repeat test for face acd
         if self.__point_outside_of_plane(p, a, c, d, b):
             q, indices, barycentric = self.__find_closest_point_on_triangle(p, ai, ci, di)
@@ -266,7 +198,6 @@ class Simplex:
                 best_sq_dist, closest_pt = sq_dist, q
                 ret_indices, ret_barycentric = indices, barycentric
         
-        print("acd: ", closest_pt)         
         # Repeat test for face adb
         if self.__point_outside_of_plane(p, a, d, b, c):
             q, indices, barycentric = self.__find_closest_point_on_triangle(p, ai, di, bi)
@@ -275,7 +206,6 @@ class Simplex:
                 best_sq_dist, closest_pt = sq_dist, q
                 ret_indices, ret_barycentric = indices, barycentric
         
-        print("adb: ", closest_pt)
         # Repeat test for face bdc
         if self.__point_outside_of_plane(p, b, d, c, a):
             q, indices, barycentric = self.__find_closest_point_on_triangle(p, bi, di, ci)
@@ -284,7 +214,6 @@ class Simplex:
                 best_sq_dist, closest_pt = sq_dist, q
                 ret_indices, ret_barycentric = indices, barycentric
 
-        print("bdc: ", closest_pt)
         return closest_pt, ret_indices, ret_barycentric
 
     """
