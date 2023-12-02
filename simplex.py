@@ -48,7 +48,9 @@ class Simplex:
         self.__prune_redundant_verts()
 
         return q
-
+    
+    def check_contains(self, vert_idx:tuple[int])->bool:
+        return vert_idx in self.verts_idx
 
     # Note: Closest point functions where shamelessly yoinked from 
     # Christer Ericson's book "Real-Time Collision Detection"
@@ -77,7 +79,7 @@ class Simplex:
         # p projects inside the [a,b] interval; must do deferred divide now
         t = t / denom
         indices = (0, 1)
-        barycentric = (1-t, t)
+        barycentric = (1.0 - t, t)
         return a + t * ab, indices, barycentric
 
     def __find_closest_point_on_triangle(self, p: glm.vec3, ai: int = 0, bi: int = 1, ci: int = 2) -> tuple[glm.vec3, tuple[int], tuple[float]]:
@@ -160,7 +162,7 @@ class Simplex:
         closest_pt = p
         best_sq_dist = sys.float_info.max 
         ret_indices, ret_barycentric = (0, 1, 2, 3), (0.25, 0.25, 0.25, 0.25)
-
+        
         # if point outside face abc then compute closest point on abc
         if self.__point_outside_of_plane(p, a, b, c, d):
             q, indices, barycentric = self.__find_closest_point_on_triangle(p, ai, bi, ci)

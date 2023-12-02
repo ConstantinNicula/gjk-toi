@@ -74,11 +74,25 @@ class DebugVisualizer3D:
         self.__add_physics_object(self.obj_b_settings.state_values)
 
         self.collision_detector = GJKCollisionDetector()
-         
+
         # display window  
         self.win.show()
         self.last_time = time.time()
 
+        #set initial conditions 
+        self.obj_a_settings.set_state(ObjectState(
+            (0.00, 45.41, 0.00),
+            (1.28, 1.35, 1.00),
+            (9.00, 0.00, 0.00),
+            (0.00, 0.00, 0.00)
+        ))
+
+        self.obj_b_settings.set_state(ObjectState(
+            (-48.01, -13.57, 37.68),
+            (1.86, 0.61, 1.77),
+            (10.33, -0.91, 1.13),
+            (0.00, 0.00, 0.62)
+        )) 
     def __add_physics_object(self, state: ObjectState):
         # to do allow selecting type
         display_mesh_item, mesh_vertices = self.scene.create_cylinder_object() 
@@ -101,6 +115,9 @@ class DebugVisualizer3D:
     def object_state_change(self, object_id:int, object_state:ObjectState):
         print (object_id, object_state)
 
+        # remove previous data
+        self.scene.clear_debug_data()
+
         # perform position update  
         mesh_item = self.scene.object_meshes[object_id]
         physics_object = self.physics_objects[object_id]
@@ -109,6 +126,10 @@ class DebugVisualizer3D:
         # lets try to run gjk 
         ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1])
         print(ret)
+
+        # display closest points
+        pts = glm_utils.to_3d_point_list(ret.closest_points)
+        self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
 
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")
@@ -161,6 +182,20 @@ class SceneController:
         mesh_item = self.__create_trimesh(box_mesh)
         self.object_meshes.append(mesh_item)
         return mesh_item
+    
+    def create_debug_line(self, points: list[glm.vec3], color:tuple[float], width:float = 2.0) -> gl.GLLinePlotItem: 
+        line_item = gl.GLLinePlotItem(pos=points, color=color, width=width, antialias=True, mode='line_strip')
+        self.view_widget.addItem(line_item)
+        self.debug_lines.append(line_item)
+        return line_item
+
+    def clear_debug_data(self):
+        for line_item in self.debug_lines:
+            self.view_widget.removeItem(line_item)
+        for mesh_item in self.debug_meshes:
+            self.view_widget.removeItem(mesh_item)
+        self.debug_lines, self.debug_meshes = [], []
+
 
 class ObjectSettingsController:
     # define ranges 
