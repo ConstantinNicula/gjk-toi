@@ -6,7 +6,7 @@ from physics_object import PhysicsObject
 CollisionData = namedtuple("CollisionData", ["hit", "simplex", "closest_points"])
 
 class GJKCollisionDetector:
-    def __init__(self, min_dist_eps: float = 1e-5, max_num_iters: int = 16, debug: bool = False):
+    def __init__(self, min_dist_eps: float = 1e-3, max_num_iters: int = 16, debug: bool = False):
         self.min_dist_eps = min_dist_eps
         self.max_num_iters = max_num_iters
         self.debug = debug
@@ -36,7 +36,7 @@ class GJKCollisionDetector:
             v, vert_idx = self.__get_minkowski_vert(obj_a, obj_b, -p)
             not_advancing = (d_p_sq - glm.dot(v, p)) < self.min_dist_eps**2
             already_seen_point = simplex.check_contains(vert_idx)
-
+            
             # 1.4) reduce simplex to smallest subset that contains p 
             simplex.reduce()
 

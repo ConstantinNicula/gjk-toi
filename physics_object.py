@@ -20,6 +20,10 @@ class PhysicsObject:
         self.vel = vel
         self.accel = accel
 
+        # save state 
+        self.saved_pos = None 
+        self.saved_vel = None 
+
     # update internal state
     def set_rotation(self, rot:glm.mat3):
         self.rot = rot 
@@ -43,6 +47,14 @@ class PhysicsObject:
         self.pos = self.pos + self.vel * dt + 0.5 * self.accel * dt**2 
         self.vel = self.vel + self.accel * dt
 
+    def save(self):
+        self.saved_pos = self.pos
+        self.saved_vel = self.vel
+
+    def restore(self):
+        self.pos = self.saved_pos
+        self.vel = self.saved_vel
+
     def get_support_point(self, global_dir: glm.vec3) -> tuple[glm.vec3, int]:
         # convert direction to local rf  
         local_dir = self.dir_to_local(global_dir)
@@ -53,7 +65,12 @@ class PhysicsObject:
 
     def get_glm_transform(self) -> glm.mat4:
         return glm.translate(self.pos) * glm.mat4(self.rot) * glm.scale(self.scale)     
-    
+     
+    def get_glm_transform_at(self, t: float) -> glm.mat4:
+        p_t = self.pos + t * self.vel + 0.5 * self.accel * t * t
+        print (p_t) 
+        return glm.translate(p_t) * glm.mat4(self.rot) * glm.scale(self.scale)     
+
     # utility functions for transformations 
     def dir_to_global(self, local_dir: glm.vec3) -> glm.vec3:
         # (M^-1)^T = ((R*S)^-1)^T = (S^-1 * R^T) ^T = R * S^-1 

@@ -9,6 +9,7 @@ import glm_utils
 from physics_object import PhysicsObject
 from collision_mesh import CollisionMesh
 from gjk import GJKCollisionDetector, CollisionData
+from toi_detector import TOIDetector
 from simplex import Simplex
 
 # display stuff
@@ -79,6 +80,7 @@ class DebugVisualizer3D:
         self.__add_physics_object(self.obj_b_settings.state_values, 'cylinder')
 
         self.collision_detector = GJKCollisionDetector()
+        self.toi_detector = TOIDetector()
         self.prev_simplex_idx = None
 
         # display window  
@@ -86,22 +88,6 @@ class DebugVisualizer3D:
         self.last_time = time.time()
 
         # set initial conditions 
-        # self.obj_a_settings.set_state(ObjectState(
-        #     (0.00, 45.41, 0.00),
-        #     (1.28, 1.35, 1.00),
-        #     (9.00, 0.00, 0.00),
-        #     (5.00, 5.00, 4.00), 
-        #     (0.00, 0.00, -9.81)
-        # ))
-
-        # self.obj_b_settings.set_state(ObjectState(
-        #     (-52.31, -13.57, 37.68),
-        #     (1.86, 0.61, 1.77),
-        #     (10.33, -0.91, 1.13),
-        #     (0.00, 0.00, 0.62), 
-        #     (0.00, 0.00, 0.00), 
-        # ))
-
         self.__load_settings()
 
     def __add_physics_object(self, state: ObjectState, object_type:str):
@@ -167,7 +153,17 @@ class DebugVisualizer3D:
         if not ret.hit: 
             pts = glm_utils.to_3d_point_list(ret.closest_points)
             self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
+
+        # run toi 
+        ret = self.toi_detector.detect(self.physics_objects[0], self.physics_objects[1])
+        print(ret)
         
+        transform = glm.transpose(self.physics_objects[1].get_glm_transform_at(ret[1])) 
+        self.scene.object_meshes[1].setTransform(transform.to_tuple())
+
+        transform = glm.transpose(self.physics_objects[0].get_glm_transform_at(ret[1])) 
+        self.scene.object_meshes[0].setTransform(transform.to_tuple())
+
         # display trajectories 
         self.__display_trajectory(self.physics_objects[0], (1.0, 0.0, 0.0, 1.0))
         self.__display_trajectory(self.physics_objects[1], (0.0, 1.0, 0.0, 1.0))
