@@ -73,6 +73,14 @@ class PhysicsObject:
         return (glm.transpose(self.rot) * (global_point - self.pos)) / self.scale 
 
     # debugging 
+    def compute_trajectory(self, t_max: float, num_steps: int) -> list[glm.vec3]: 
+        trajectory = []
+        for i in range(num_steps):
+            t = t_max * i / (num_steps-1)
+            p_t = self.pos + self.vel * t + 0.5 * self.accel * t**2 
+            trajectory.append(p_t)
+        return trajectory
+    
     def get_transformed_mesh_vert(self, vert_idx: int) -> glm.vec3:
         return self.point_to_global(self.collision_mesh.verts[vert_idx]) 
 

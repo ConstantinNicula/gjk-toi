@@ -1,3 +1,5 @@
+import typing
+import pickle, os
 import glm, trimesh
 import math, time
 from collections import namedtuple
@@ -40,7 +42,7 @@ class SuperSpinner(QtWidgets.QDoubleSpinBox):
         self.unsetCursor()
 
 
-ObjectState = namedtuple("ObjectState", ["rotation", "scale", "position", "velocity"])
+ObjectState = namedtuple("ObjectState", ["rotation", "scale", "position", "velocity", "accel"])
 
 class DebugVisualizer3D: 
     def __init__(self, name):
@@ -56,7 +58,7 @@ class DebugVisualizer3D:
         self.win = QtWidgets.QMainWindow()
         self.win.setCentralWidget(self.area)
         self.win.setWindowTitle(name)
-        self.win.resize(1200, 700)
+        self.win.resize(1600, 700)
 
         # create dock for 3d viewport 
         self.scene = SceneController("3D View", self.area, location='left') 
@@ -68,35 +70,50 @@ class DebugVisualizer3D:
         self.obj_b_settings = ObjectSettingsController("Object B Settings", self.area, callback_b, location='bottom', ref_dock=self.obj_a_settings.dock)
 
         # TO DO: add other settings controllers 
+    
+
 
         # storage for internal data  
-        self.physics_objects = []
-        self.__add_physics_object(self.obj_a_settings.state_values)
-        self.__add_physics_object(self.obj_b_settings.state_values)
+        self.physics_objects: list[PhysicsObject] = []
+        self.__add_physics_object(self.obj_a_settings.state_values, 'cube')
+        self.__add_physics_object(self.obj_b_settings.state_values, 'cylinder')
 
         self.collision_detector = GJKCollisionDetector()
         self.prev_simplex_idx = None
+
         # display window  
         self.win.show()
         self.last_time = time.time()
 
-        #set initial conditions 
-        self.obj_a_settings.set_state(ObjectState(
-            (0.00, 45.41, 0.00),
-            (1.28, 1.35, 1.00),
-            (9.00, 0.00, 0.00),
-            (0.00, 0.00, 0.00)
-        ))
+        # set initial conditions 
+        # self.obj_a_settings.set_state(ObjectState(
+        #     (0.00, 45.41, 0.00),
+        #     (1.28, 1.35, 1.00),
+        #     (9.00, 0.00, 0.00),
+        #     (5.00, 5.00, 4.00), 
+        #     (0.00, 0.00, -9.81)
+        # ))
 
-        self.obj_b_settings.set_state(ObjectState(
-            (-52.31, -13.57, 37.68),
-            (1.86, 0.61, 1.77),
-            (10.33, -0.91, 1.13),
-            (0.00, 0.00, 0.62)
-        )) 
-    def __add_physics_object(self, state: ObjectState):
-        # to do allow selecting type
-        display_mesh_item, mesh_vertices = self.scene.create_cylinder_object() 
+        # self.obj_b_settings.set_state(ObjectState(
+        #     (-52.31, -13.57, 37.68),
+        #     (1.86, 0.61, 1.77),
+        #     (10.33, -0.91, 1.13),
+        #     (0.00, 0.00, 0.62), 
+        #     (0.00, 0.00, 0.00), 
+        # ))
+
+        self.__load_settings()
+
+    def __add_physics_object(self, state: ObjectState, object_type:str):
+        # check options 
+        display_mesh_item, mesh_vertices = None, None
+        if object_type == 'cylinder': 
+            display_mesh_item, mesh_vertices = self.scene.create_cylinder_object() 
+        elif object_type == 'cube':
+            display_mesh_item, mesh_vertices = self.scene.create_cube_object() 
+        else:
+            raise Exception(f"Unknown object_type {object_type}")
+
         collision_mesh = CollisionMesh(glm_utils.to_glm_vec_list(mesh_vertices))
         physics_object = PhysicsObject(collision_mesh)
 
@@ -107,11 +124,25 @@ class DebugVisualizer3D:
         physics_object.set_rotation(glm_utils.rotation_from_euler(*state.rotation)) 
         physics_object.set_scale(glm_utils.to_glm_vec(state.scale)) 
         physics_object.set_position(glm_utils.to_glm_vec(state.position)) 
-        physics_object.set_velocity(glm_utils.to_glm_vec(state.velocity)) 
+        physics_object.set_velocity(glm_utils.to_glm_vec(state.velocity))
+        physics_object.set_accel(glm_utils.to_glm_vec(state.accel))
 
         transform = glm.transpose(physics_object.get_glm_transform()) 
         display_mesh_item.setTransform(transform.to_tuple())
- 
+
+    def __save_settings(self):
+        with open('./save.bin', 'wb') as file:
+            pickle.dump((self.obj_a_settings.state_values, self.obj_b_settings.state_values), file) 
+    
+    def __load_settings(self):
+        if not os.path.isfile('./save.bin'):
+            print('No save file found! Exiting..')
+            return
+
+        with open('./save.bin', 'rb') as file:
+            config_a, config_b = pickle.load(file)
+            self.obj_a_settings.set_state(config_a)
+            self.obj_b_settings.set_state(config_b)
 
     def object_state_change(self, object_id:int, object_state:ObjectState):
         print (object_id, object_state)
@@ -136,10 +167,18 @@ class DebugVisualizer3D:
         if not ret.hit: 
             pts = glm_utils.to_3d_point_list(ret.closest_points)
             self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
+        
+        # display trajectories 
+        self.__display_trajectory(self.physics_objects[0], (1.0, 0.0, 0.0, 1.0))
+        self.__display_trajectory(self.physics_objects[1], (0.0, 1.0, 0.0, 1.0))
 
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")
         self.last_time = curr_time
+
+    def __display_trajectory(self, physics_object: PhysicsObject, color:tuple[float]):
+        pts = glm_utils.to_3d_point_list(physics_object.compute_trajectory(10, 100))
+        self.scene.create_debug_line(pts, color, 8)
 
     def __construct_simplex_from_indices(self, object_a: PhysicsObject, object_b: PhysicsObject, verts_idx: list[tuple[int]])-> Simplex:  
         simplex = Simplex()
@@ -149,18 +188,14 @@ class DebugVisualizer3D:
             simplex.add_point(minkowski_vert, (vert_a_idx, vert_b_idx))
         return simplex
 
-    def create_3d_view_dock(self):
-        pass 
-
-    def add_numerical_input():
-        pass 
     def display(self):
         self.app.exec_()
+        self.__save_settings()
 
 
 
 class SceneController:
-    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (3, 3), location:str = 'left'):
+    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (10, 2), location:str = 'left'):
         # create a dock and pin it to the parent
         self.dock = Dock(name, parent_area, size)
         parent_area.addDock(self.dock, location)
@@ -195,7 +230,7 @@ class SceneController:
         box_mesh = trimesh.creation.box(extents=[1.0, 1.0, 1.0])
         mesh_item = self.__create_trimesh(box_mesh)
         self.object_meshes.append(mesh_item)
-        return mesh_item
+        return mesh_item, box_mesh.vertices.tolist()
     
     def create_debug_line(self, points: list[glm.vec3], color:tuple[float], width:float = 2.0) -> gl.GLLinePlotItem: 
         line_item = gl.GLLinePlotItem(pos=points, color=color, width=width, antialias=True, mode='line_strip')
@@ -230,14 +265,15 @@ class ObjectSettingsController:
         self.dock.addWidget(self.layout)
 
         # state storage 
-        self.state_values = ObjectState((0.0, 0.0,0.0), (1.0, 1.0, 1.0), (9.0, 0.0,0.0), (0.0, 0.0,0.0)) 
+        self.state_values = ObjectState((0.0, 0.0,0.0), (1.0, 1.0, 1.0), (0.0, 0.0,0.0), (0.0, 0.0,0.0), (0.0, 0.0,0.0)) 
 
         # create controllers 
         self.rotation_controller = _add_labeled_vec3_field(self.layout, "Rotation:",self.min_rot, self.max_rot,self.state_values.rotation, self.__read_all_data)
         self.scale_controller =_add_labeled_vec3_field(self.layout, "Scale:", self.min_scale, self.max_scale, self.state_values.scale, self.__read_all_data)
+        
         self.position_controller =_add_labeled_vec3_field(self.layout, "Initial position:", self.min_vals, self.max_vals, self.state_values.position, self.__read_all_data)
         self.velocity_controller = _add_labeled_vec3_field(self.layout, "Initial velocity:", self.min_vals, self.max_vals, self.state_values.velocity, self.__read_all_data)
-
+        self.acceleration_controller = _add_labeled_vec3_field(self.layout, "Acceleration:", self.min_vals, self.max_vals, self.state_values.velocity, self.__read_all_data)
         # notify parent that state has changed 
         self.update_callback = update_callback 
 
@@ -250,7 +286,8 @@ class ObjectSettingsController:
             self.__read_vec_data(self.rotation_controller),
             self.__read_vec_data(self.scale_controller), 
             self.__read_vec_data(self.position_controller), 
-            self.__read_vec_data(self.velocity_controller) 
+            self.__read_vec_data(self.velocity_controller),
+            self.__read_vec_data(self.acceleration_controller) 
         )
         self.update_callback(self.state_values) 
 
@@ -264,6 +301,7 @@ class ObjectSettingsController:
         self.__update_controller(state.scale, self.scale_controller)
         self.__update_controller(state.position, self.position_controller)
         self.__update_controller(state.velocity, self.velocity_controller)
+        self.__update_controller(state.accel, self.acceleration_controller)
 
 
 def _create_float_field(range: tuple[float, float], default_value:float, callback) -> SuperSpinner:
