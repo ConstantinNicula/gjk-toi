@@ -29,5 +29,6 @@ The following steps are required to setup and run the demo:
 - `python main.py` - run the visualization demo 
 
 
-## Demo 
-TO DO
+## Demo
+3D visualizer used for testing the TOI algorithm under different initial conditions (rotations, scale, position, velocity, acceleration): 
+![](https://github.com/ConstantinNicula/gjk-toi/blob/main/extras/demo_imgs/demo.png)
