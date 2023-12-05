@@ -82,9 +82,8 @@ class DebugVisualizer3D:
         callback_b = lambda object_state: self.object_state_change(1, object_state)
         self.obj_b_settings = ObjectSettingsController("Object B Settings", self.area, callback_b, location='bottom', ref_dock=self.obj_a_settings.dock)
 
-        # TO DO: add other settings controllers 
-    
-
+        # other settings controllers
+        self.time_settings = TimeSettingsController("Time", self.area, self.current_time_update, ref_dock=self.scene.dock) 
 
         # storage for internal data  
         self.physics_objects: list[PhysicsObject] = []
@@ -146,20 +145,10 @@ class DebugVisualizer3D:
             self.obj_b_settings.set_state(config_b)
 
     def __display_trajectory(self, physics_object: PhysicsObject, t_max: float, color:tuple[float]):
-        pts = glm_utils.to_3d_point_list(physics_object.compute_trajectory(t_max, 100))
+        pts = glm_utils.to_3d_point_list(physics_object.compute_trajectory(t_max, 50))
         self.scene.create_debug_line(pts, color, 8)
-
-    def __construct_simplex_from_indices(self, object_a: PhysicsObject, object_b: PhysicsObject, verts_idx: list[tuple[int]])-> Simplex:  
-        simplex = Simplex()
-        for vert_a_idx, vert_b_idx in verts_idx:
-            minkowski_vert = object_a.get_transformed_mesh_vert(vert_a_idx) \
-                             - object_b.get_transformed_mesh_vert(vert_b_idx) 
-            simplex.add_point(minkowski_vert, (vert_a_idx, vert_b_idx))
-        return simplex
-
+    
     def object_state_change(self, object_id:int, object_state:ObjectState):
-        print (object_id, object_state)
-
         # remove previous data
         self.scene.clear_debug_data()
 
@@ -168,45 +157,55 @@ class DebugVisualizer3D:
         physics_object = self.physics_objects[object_id]
         self.__update_object_state(mesh_item, physics_object, object_state)
 
-        # lets try to run gjk 
-        starting_simplex = None 
-        if self.prev_simplex_idx:
-            starting_simplex = self.__construct_simplex_from_indices(self.physics_objects[0], self.physics_objects[1], self.prev_simplex_idx) 
-        col_ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1], starting_simplex)
-        self.prev_simplex_idx = col_ret.simplex.verts_idx
-        print(col_ret)
+        # # lets try to run gjk 
+        # starting_simplex = None 
+        # if self.prev_simplex_idx:
+        #     starting_simplex = self.__construct_simplex_from_indices(self.physics_objects[0], self.physics_objects[1], self.prev_simplex_idx) 
+        # col_ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1], starting_simplex)
+        # self.prev_simplex_idx = col_ret.simplex.verts_idx
+        # print(col_ret)
 
-        # display closest points
-        if not col_ret.hit: 
-            pts = glm_utils.to_3d_point_list(col_ret.closest_points)
-            self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
+        # # display closest points
+        # if not col_ret.hit: 
+        #     pts = glm_utils.to_3d_point_list(col_ret.closest_points)
+        #     self.scene.create_debug_line(pts, (0.8, 0.3, 0.3, 1.0), 4)     
 
         # Detect time of impact 
-        toi_ret = self.toi_detector.detect(self.physics_objects[0], self.physics_objects[1])
+        toi_ret = self.toi_detector.detect(self.physics_objects[0], self.physics_objects[1], t_max=10)
+        self.time_settings.set_min_max(0.0, toi_ret[1])
+        self.time_settings.reset_value()
         
-        # transform = glm.transpose(self.physics_objects[1].get_glm_transform_at(toi_ret[1])) 
-        # self.scene.object_meshes[1].setTransform(transform.to_tuple())
-
-        # transform = glm.transpose(self.physics_objects[0].get_glm_transform_at(toi_ret[1])) 
-        # self.scene.object_meshes[0].setTransform(transform.to_tuple())
-
         # Display trajectories
         hit, t_col, t_steps = toi_ret 
         self.__display_trajectory(self.physics_objects[0], t_col, COLORS["nice_purple_intense"])
         self.__display_trajectory(self.physics_objects[1], t_col, COLORS["nice_green"])
 
-        print(toi_ret)
         # Display intermediate test locations  
         for t_step in t_steps:
             mesh_item, _ = self.scene.create_cube_object(color = COLORS["nice_purple_light"], wireframe=True)
             self.__set_mesh_transform(mesh_item, self.physics_objects[0], t_step)
-
+            
             mesh_item, _ = self.scene.create_cylinder_object(color = COLORS["nice_green_light"], wireframe=True)
             self.__set_mesh_transform(mesh_item, self.physics_objects[1], t_step)
-
+        
+        if hit:
+            self.time_settings.reset_value(end=True) 
+            self.current_time_update(t_col)
+        else: 
+            self.current_time_update(0.0)
+            
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")
         self.last_time = curr_time
+
+    def current_time_update(self, new_time):
+        self.time = new_time
+
+        transform = glm.transpose(self.physics_objects[1].get_glm_transform_at(new_time)) 
+        self.scene.object_meshes[1].setTransform(transform.to_tuple())
+
+        transform = glm.transpose(self.physics_objects[0].get_glm_transform_at(new_time)) 
+        self.scene.object_meshes[0].setTransform(transform.to_tuple())
 
     def display(self):
         self.app.exec_()
@@ -215,7 +214,7 @@ class DebugVisualizer3D:
 
 
 class SceneController:
-    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (10, 2), location:str = 'left'):
+    def __init__(self, name: str, parent_area: DockArea, size:tuple[int, int] = (20, 20), location:str = 'left'):
         # create a dock and pin it to the parent
         self.dock = Dock(name, parent_area, size)
         parent_area.addDock(self.dock, location)
@@ -225,6 +224,10 @@ class SceneController:
         self.dock.addWidget(self.view_widget)
 
         # create xy plane grid and add it to view
+        axis = gl.GLAxisItem()
+        axis.setSize(10, 10, 10)
+        self.view_widget.addItem(axis)
+
         grid = gl.GLGridItem()
         grid.scale(2, 2, 1)
         self.view_widget.addItem(grid)
@@ -247,9 +250,10 @@ class SceneController:
         return mesh_item 
 
     def create_cylinder_object(self, color: tuple[float] = (1.0, 1.0, 1.0, 1.0),\
+                                alpha: float = 1.0,
                                 wireframe: bool = False) -> tuple[gl.GLMeshItem, list]:
         cylinder_mesh = trimesh.creation.cylinder(1, 1, 15)
-        mesh_item = self.__create_trimesh(cylinder_mesh, color, wireframe)
+        mesh_item = self.__create_trimesh(cylinder_mesh, (*color[0:3], alpha), wireframe)
         if not wireframe:
             self.object_meshes.append(mesh_item)
         else:
@@ -257,9 +261,10 @@ class SceneController:
         return mesh_item, cylinder_mesh.vertices.tolist()
 
     def create_cube_object(self, color: tuple[float] = (1.0, 1.0, 1.0, 1.0),\
+                           alpha: float = 1.0,
                            wireframe: bool = False) -> tuple[gl.GLMeshItem, list]:
         box_mesh = trimesh.creation.box(extents=[1.0, 1.0, 1.0])
-        mesh_item = self.__create_trimesh(box_mesh, color, wireframe)
+        mesh_item = self.__create_trimesh(box_mesh, (*color[0:3], alpha), wireframe)
         if not wireframe:
             self.object_meshes.append(mesh_item)
         else: 
@@ -337,6 +342,63 @@ class ObjectSettingsController:
         self.__update_controller(state.velocity, self.velocity_controller)
         self.__update_controller(state.accel, self.acceleration_controller)
 
+class TimeSettingsController():
+    def __init__(self, name: str, parent_area: DockArea, callback, size:tuple[int, int] = (1, 1), location:str = 'bottom', ref_dock: Dock = None):
+        # create a dock and pin it to the parent
+        self.dock = Dock(name, parent_area, size)
+        if not ref_dock:
+            parent_area.addDock(self.dock, location)
+        else:
+            parent_area.addDock(self.dock, location, ref_dock)
+
+        # create layout 
+        layout = pg.LayoutWidget()
+        self.dock.addWidget(layout)
+
+        # state values 
+        self.min_val, self.max_val = 0.0, 1.0 
+        self.callback = callback
+
+        # create slider
+        self.min_label, self.max_label, self.slider = self.__create_slider(layout)
+
+    def __create_slider(self, parent_layout: pg.LayoutWidget) -> tuple[QtWidgets.QLabel, QtWidgets.QLabel]:
+        min_label = QtWidgets.QLabel(f"{self.min_val:.03f}")
+        max_label = QtWidgets.QLabel(f"{self.max_val:.03f}")
+
+        # create slider
+        slider = QtWidgets.QSlider()
+        slider.setOrientation(QtCore.Qt.Orientation.Horizontal)
+        slider.valueChanged.connect(self.__handle_callback) 
+        slider.setMaximum(1000)
+
+        # create sub-layout for input fields and add input fields to it
+        parent_layout.addWidget(min_label)
+        parent_layout.nextCol()
+        parent_layout.addWidget(slider)
+        parent_layout.nextCol()
+        parent_layout.addWidget(max_label)
+        
+        return min_label, max_label, slider
+
+    def __handle_callback(self, t):
+        t_norm = t / 1000
+        real_val = (self.max_val - self.min_val) * t_norm + self.min_val 
+        if self.callback:
+            self.callback(real_val)
+    
+    def reset_value(self, end:bool=True):
+        if end:
+            self.slider.setValue(1000)
+        else: 
+            self.slider.setValue(0)
+
+    def set_min_max(self, min, max):
+        self.min_val, self.max_val =  min, max
+
+        self.min_label.setText(f"{self.min_val:0.3f}")
+        self.max_label.setText(f"{self.max_val:0.3f}")
+
 
 def _create_float_field(range: tuple[float, float], default_value:float, callback) -> SuperSpinner:
     super_spin = SuperSpinner()
@@ -387,7 +449,7 @@ def _add_labeled_vec3_field(parent_layout: pg.LayoutWidget,
 
 
 def main():
-    debug_visualizer = DebugVisualizer3D("Test")
+    debug_visualizer = DebugVisualizer3D("GJK-Time of impact")
     debug_visualizer.display()
 
 if __name__ == "__main__":
