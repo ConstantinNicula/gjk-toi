@@ -1,0 +1,7 @@
+numpy 
+PyGLM
+matplotlib
+pyqtgraph==0.13.2
+pyopengl
+pyqt5
+trimesh

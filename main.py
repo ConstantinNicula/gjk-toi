@@ -181,7 +181,7 @@ class DebugVisualizer3D:
         self.__display_trajectory(self.physics_objects[1], t_col, COLORS["nice_green"])
 
         # Display intermediate test locations  
-        for t_step in t_steps:
+        for t_step in (t_steps[0], t_steps[-1]):
             mesh_item, _ = self.scene.create_cube_object(color = COLORS["nice_purple_light"], wireframe=True)
             self.__set_mesh_transform(mesh_item, self.physics_objects[0], t_step)
             
