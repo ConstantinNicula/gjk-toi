@@ -45,6 +45,18 @@ class SuperSpinner(QtWidgets.QDoubleSpinBox):
 
 ObjectState = namedtuple("ObjectState", ["rotation", "scale", "position", "velocity", "accel"])
 
+
+def hex_to_rgb_decimal(hex_code:str)->tuple[float]:
+    hex_code = hex_code.strip("#")
+    return (int(hex_code[0:2], 16)/255, int(hex_code[2:4], 16)/255, int(hex_code[4:6], 16)/255, 1.0) 
+
+COLORS = {
+    "nice_green": (0.5372549019607843, 0.6784313725490196, 0.3215686274509804, 1.0),
+    "nice_green_light": hex_to_rgb_decimal("#BED2A0"),
+    "nice_purple": (0.4627450980392157, 0.3215686274509804, 0.6784313725490196, 1.0),
+    "nice_purple_light": hex_to_rgb_decimal("#C8B9DE"),
+    "nice_purple_intense": hex_to_rgb_decimal("#5200D2")
+}
 class DebugVisualizer3D: 
     def __init__(self, name):
         name = name if name else "Default name" 
@@ -94,9 +106,9 @@ class DebugVisualizer3D:
         # check options 
         display_mesh_item, mesh_vertices = None, None
         if object_type == 'cylinder': 
-            display_mesh_item, mesh_vertices = self.scene.create_cylinder_object() 
+            display_mesh_item, mesh_vertices = self.scene.create_cylinder_object(color=COLORS["nice_green"]) 
         elif object_type == 'cube':
-            display_mesh_item, mesh_vertices = self.scene.create_cube_object() 
+            display_mesh_item, mesh_vertices = self.scene.create_cube_object(color=COLORS["nice_purple"]) 
         else:
             raise Exception(f"Unknown object_type {object_type}")
 
@@ -112,10 +124,13 @@ class DebugVisualizer3D:
         physics_object.set_position(glm_utils.to_glm_vec(state.position)) 
         physics_object.set_velocity(glm_utils.to_glm_vec(state.velocity))
         physics_object.set_accel(glm_utils.to_glm_vec(state.accel))
+        self.__set_mesh_transform(display_mesh_item, physics_object)
 
-        transform = glm.transpose(physics_object.get_glm_transform()) 
+    def __set_mesh_transform(self, display_mesh_item: gl.GLMeshItem, physics_object: PhysicsObject, t:float = 0):
+        transform = glm.transpose(physics_object.get_glm_transform_at(t)) 
         display_mesh_item.setTransform(transform.to_tuple())
 
+   
     def __save_settings(self):
         with open('./save.bin', 'wb') as file:
             pickle.dump((self.obj_a_settings.state_values, self.obj_b_settings.state_values), file) 
@@ -129,6 +144,18 @@ class DebugVisualizer3D:
             config_a, config_b = pickle.load(file)
             self.obj_a_settings.set_state(config_a)
             self.obj_b_settings.set_state(config_b)
+
+    def __display_trajectory(self, physics_object: PhysicsObject, t_max: float, color:tuple[float]):
+        pts = glm_utils.to_3d_point_list(physics_object.compute_trajectory(t_max, 100))
+        self.scene.create_debug_line(pts, color, 8)
+
+    def __construct_simplex_from_indices(self, object_a: PhysicsObject, object_b: PhysicsObject, verts_idx: list[tuple[int]])-> Simplex:  
+        simplex = Simplex()
+        for vert_a_idx, vert_b_idx in verts_idx:
+            minkowski_vert = object_a.get_transformed_mesh_vert(vert_a_idx) \
+                             - object_b.get_transformed_mesh_vert(vert_b_idx) 
+            simplex.add_point(minkowski_vert, (vert_a_idx, vert_b_idx))
+        return simplex
 
     def object_state_change(self, object_id:int, object_state:ObjectState):
         print (object_id, object_state)
@@ -145,44 +172,41 @@ class DebugVisualizer3D:
         starting_simplex = None 
         if self.prev_simplex_idx:
             starting_simplex = self.__construct_simplex_from_indices(self.physics_objects[0], self.physics_objects[1], self.prev_simplex_idx) 
-        ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1], starting_simplex)
-        self.prev_simplex_idx = ret.simplex.verts_idx
-        print(ret)
+        col_ret = self.collision_detector.collide(self.physics_objects[0], self.physics_objects[1], starting_simplex)
+        self.prev_simplex_idx = col_ret.simplex.verts_idx
+        print(col_ret)
 
         # display closest points
-        if not ret.hit: 
-            pts = glm_utils.to_3d_point_list(ret.closest_points)
+        if not col_ret.hit: 
+            pts = glm_utils.to_3d_point_list(col_ret.closest_points)
             self.scene.create_debug_line(pts, (1.0, 0.0, 0.0, 1.0), 4)     
 
-        # run toi 
-        ret = self.toi_detector.detect(self.physics_objects[0], self.physics_objects[1])
-        print(ret)
+        # Detect time of impact 
+        toi_ret = self.toi_detector.detect(self.physics_objects[0], self.physics_objects[1])
         
-        transform = glm.transpose(self.physics_objects[1].get_glm_transform_at(ret[1])) 
-        self.scene.object_meshes[1].setTransform(transform.to_tuple())
+        # transform = glm.transpose(self.physics_objects[1].get_glm_transform_at(toi_ret[1])) 
+        # self.scene.object_meshes[1].setTransform(transform.to_tuple())
 
-        transform = glm.transpose(self.physics_objects[0].get_glm_transform_at(ret[1])) 
-        self.scene.object_meshes[0].setTransform(transform.to_tuple())
+        # transform = glm.transpose(self.physics_objects[0].get_glm_transform_at(toi_ret[1])) 
+        # self.scene.object_meshes[0].setTransform(transform.to_tuple())
 
-        # display trajectories 
-        self.__display_trajectory(self.physics_objects[0], (1.0, 0.0, 0.0, 1.0))
-        self.__display_trajectory(self.physics_objects[1], (0.0, 1.0, 0.0, 1.0))
+        # Display trajectories
+        hit, t_col, t_steps = toi_ret 
+        self.__display_trajectory(self.physics_objects[0], t_col, COLORS["nice_purple_intense"])
+        self.__display_trajectory(self.physics_objects[1], t_col, COLORS["nice_green"])
+
+        print(toi_ret)
+        # Display intermediate test locations  
+        for t_step in t_steps:
+            mesh_item, _ = self.scene.create_cube_object(color = COLORS["nice_purple_light"], wireframe=True)
+            self.__set_mesh_transform(mesh_item, self.physics_objects[0], t_step)
+
+            mesh_item, _ = self.scene.create_cylinder_object(color = COLORS["nice_green_light"], wireframe=True)
+            self.__set_mesh_transform(mesh_item, self.physics_objects[1], t_step)
 
         curr_time = time.time()
         print (f"elapsed {curr_time - self.last_time}s")
         self.last_time = curr_time
-
-    def __display_trajectory(self, physics_object: PhysicsObject, color:tuple[float]):
-        pts = glm_utils.to_3d_point_list(physics_object.compute_trajectory(10, 100))
-        self.scene.create_debug_line(pts, color, 8)
-
-    def __construct_simplex_from_indices(self, object_a: PhysicsObject, object_b: PhysicsObject, verts_idx: list[tuple[int]])-> Simplex:  
-        simplex = Simplex()
-        for vert_a_idx, vert_b_idx in verts_idx:
-            minkowski_vert = object_a.get_transformed_mesh_vert(vert_a_idx) \
-                             - object_b.get_transformed_mesh_vert(vert_b_idx) 
-            simplex.add_point(minkowski_vert, (vert_a_idx, vert_b_idx))
-        return simplex
 
     def display(self):
         self.app.exec_()
@@ -210,22 +234,36 @@ class SceneController:
         self.debug_meshes = []
         self.debug_lines = []
 
-    def __create_trimesh(self, mesh: trimesh.Trimesh) -> gl.GLMeshItem:
+    def __create_trimesh(self, mesh: trimesh.Trimesh, color: tuple[float] = (1.0, 1.0, 1.0, 1.0), wireframe:bool = False) -> gl.GLMeshItem:
         mesh_data = gl.MeshData(mesh.vertices, mesh.faces[:, ::-1])
-        mesh_item = gl.GLMeshItem(meshdata = mesh_data, drawFaces = True, smooth = False, computeNormals = True, shader='shaded')
+        mesh_item = None
+        if not wireframe:
+            mesh_item = gl.GLMeshItem(meshdata = mesh_data, color = color, edgeColor = color, \
+                                      drawFaces = True, smooth = False, computeNormals = True, shader='shaded')
+        else:
+            mesh_item = gl.GLMeshItem(meshdata = mesh_data, color = color, edgeColor = color, \
+                                      drawEdges = True, drawFaces = False, smooth = False, computeNormals = True, shader='shaded', glOptions='opaque')
         self.view_widget.addItem(mesh_item)
         return mesh_item 
 
-    def create_cylinder_object(self) -> gl.GLMeshItem:
-        cylinder_mesh = trimesh.creation.cylinder(1, 1, 20)
-        mesh_item = self.__create_trimesh(cylinder_mesh)
-        self.object_meshes.append(mesh_item)
+    def create_cylinder_object(self, color: tuple[float] = (1.0, 1.0, 1.0, 1.0),\
+                                wireframe: bool = False) -> tuple[gl.GLMeshItem, list]:
+        cylinder_mesh = trimesh.creation.cylinder(1, 1, 15)
+        mesh_item = self.__create_trimesh(cylinder_mesh, color, wireframe)
+        if not wireframe:
+            self.object_meshes.append(mesh_item)
+        else:
+            self.debug_meshes.append(mesh_item)
         return mesh_item, cylinder_mesh.vertices.tolist()
 
-    def create_cube_object(self) -> gl.GLMeshItem:
+    def create_cube_object(self, color: tuple[float] = (1.0, 1.0, 1.0, 1.0),\
+                           wireframe: bool = False) -> tuple[gl.GLMeshItem, list]:
         box_mesh = trimesh.creation.box(extents=[1.0, 1.0, 1.0])
-        mesh_item = self.__create_trimesh(box_mesh)
-        self.object_meshes.append(mesh_item)
+        mesh_item = self.__create_trimesh(box_mesh, color, wireframe)
+        if not wireframe:
+            self.object_meshes.append(mesh_item)
+        else: 
+            self.debug_meshes.append(mesh_item)
         return mesh_item, box_mesh.vertices.tolist()
     
     def create_debug_line(self, points: list[glm.vec3], color:tuple[float], width:float = 2.0) -> gl.GLLinePlotItem: 

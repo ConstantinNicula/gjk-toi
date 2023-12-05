@@ -12,18 +12,27 @@ class TOIDetector:
         # use default settings of GJK for now  
         self.collision_detector = GJKCollisionDetector()
     
-    def detect(self, obj_a: PhysicsObject, obj_b: PhysicsObject, t_max:float=100) -> tuple[bool, float]:
+    def detect(self, obj_a: PhysicsObject, obj_b: PhysicsObject, t_max:float=100, reuse_simplex: bool = True) -> tuple[bool, float]:
         # Save object states 
         obj_a.save(), obj_b.save()
         
         # Solution must be found in fixed number of iters 
-        prev_simplex = None
-        t = 0 
+        prev_simplex_verts_idx = None
+        t = 0
+        t_steps = [] 
         for i in range(self.max_num_timesteps):
-            print (f"TOI iteration {i} current time {t}")
+            # store time of current iteration
+            t_steps.append(t)
+
+            # 0) reuse simplex from previous iteration to speed things up
+            simplex = None
+            if prev_simplex_verts_idx and reuse_simplex:
+               simplex = self.__construct_simplex_from_indices(obj_a, obj_b, prev_simplex_verts_idx)
+
             # 1) Compute distance between objects:
-            collision_data = self.collision_detector.collide(obj_a, obj_b, prev_simplex)
+            collision_data = self.collision_detector.collide(obj_a, obj_b, simplex)
             cp_a, cp_b = collision_data.closest_points
+            prev_simplex_verts_idx = collision_data.simplex.verts_idx
 
             # 2) Compute separating distance and normal normal from a to b
             n = cp_b - cp_a # not normalized
@@ -32,7 +41,7 @@ class TOIDetector:
             print(collision_data, n_sq)
             if n_sq < self.dist_eps**2 or collision_data.hit:
                 obj_a.restore(), obj_b.restore()
-                return (True, t)  
+                return (True, t, t_steps)  
 
             # 3) Conservative advancement 
             #  (pc_a(t')-pc_a).n - (pc_b(t')-pc_b).n = d 
@@ -49,7 +58,7 @@ class TOIDetector:
             # 4) Check solutions, advance time
             if not valid_dt_sol:
                 obj_a.restore(), obj_b.restore()
-                return (False, t_max); # not hit
+                return (False, t_max, t_steps) # not hit
 
             dt = min(valid_dt_sol)
             t = t + dt 
@@ -59,7 +68,15 @@ class TOIDetector:
 
         # Ran out of iters (that most likely means we are close to a surface)
         obj_a.restore(), obj_b.restore()
-        return (True, t)
+        return (True, t, t_steps)
+
+    def __construct_simplex_from_indices(self, object_a: PhysicsObject, object_b: PhysicsObject, verts_idx: list[tuple[int]])-> Simplex:  
+        simplex = Simplex()
+        for vert_a_idx, vert_b_idx in verts_idx:
+            minkowski_vert = object_a.get_transformed_mesh_vert(vert_a_idx) \
+                             - object_b.get_transformed_mesh_vert(vert_b_idx) 
+            simplex.add_point(minkowski_vert, (vert_a_idx, vert_b_idx))
+        return simplex
 
 def _solve_quadratic(a: float, b: float, c: float) -> tuple[float]|None:
     # degenerate case, attempt to use linear solver

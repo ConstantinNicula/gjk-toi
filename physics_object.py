@@ -68,7 +68,6 @@ class PhysicsObject:
      
     def get_glm_transform_at(self, t: float) -> glm.mat4:
         p_t = self.pos + t * self.vel + 0.5 * self.accel * t * t
-        print (p_t) 
         return glm.translate(p_t) * glm.mat4(self.rot) * glm.scale(self.scale)     
 
     # utility functions for transformations 
